@@ -19,13 +19,6 @@
   </description>
   <url>https://github.com/czetsuyatech/nerv-audit</url>
 
-  <distributionManagement>
-    <repository>
-      <id>central</id>
-      <url>https://central.sonatype.com/</url>
-    </repository>
-  </distributionManagement>
-
   <licenses>
     <license>
       <name>The Apache License, Version 2.0</name>
@@ -108,7 +101,24 @@
 
   <profiles>
     <profile>
-      <id>release</id>
+      <id>github-release</id>
+      <distributionManagement>
+        <repository>
+          <id>github</id>
+          <name>GitHub Packages</name>
+          <url>https://maven.pkg.github.com/czetsuyatech/nerv-audit</url>
+        </repository>
+      </distributionManagement>
+    </profile>
+
+    <profile>
+      <id>central-release</id>
+      <distributionManagement>
+        <repository>
+          <id>central</id>
+          <url>https://central.sonatype.com/</url>
+        </repository>
+      </distributionManagement>
       <build>
         <plugins>
           <plugin>

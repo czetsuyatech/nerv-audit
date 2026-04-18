@@ -6,12 +6,12 @@
   <parent>
     <groupId>com.czetsuyatech.nerv</groupId>
     <artifactId>nerv-audit</artifactId>
-    <version>LATEST_SNAPSHOT</version>
+    <version>1.0.0</version>
   </parent>
 
   <groupId>com.czetsuyatech.nerv</groupId>
   <artifactId>nerv-audit-lite</artifactId>
-  <version>LATEST_SNAPSHOT</version>
+  <version>1.0.0</version>
   <name>NERV | Audit Lite</name>
 
   <dependencies>

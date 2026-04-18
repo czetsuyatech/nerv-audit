@@ -12,7 +12,7 @@
 
   <groupId>com.czetsuyatech.nerv</groupId>
   <artifactId>nerv-audit</artifactId>
-  <version>1.0.0</version>
+  <version>LATEST-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>NERV | Audit</name>
   <description>Core auditing library with Envers integration, query model, and SQL builder.

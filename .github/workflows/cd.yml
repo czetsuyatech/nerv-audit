@@ -1,0 +1,23 @@
+name: Continuous Delivery
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment
+        type: environment
+        required: true
+
+jobs:
+  cd:
+    uses: czetsuyatech/nerv-actions/.github/workflows/cd.yml@main
+    with:
+      javaVersion: '25'
+    secrets:
+      githubAppId: ${{ secrets.NERV_RELEASE_APP_ID }}
+      githubAppPrivateKey: ${{ secrets.NERV_RELEASE_APP_PRIVATE_KEY }}
+      githubToken: ${{ secrets.GH_PKG_TOKEN }}

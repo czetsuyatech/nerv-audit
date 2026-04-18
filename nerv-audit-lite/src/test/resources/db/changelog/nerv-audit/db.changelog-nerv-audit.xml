@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="
+http://www.liquibase.org/xml/ns/dbchangelog
+http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+  <include file="/db/changelog/nerv-audit/001-test-create-user-table.xml"/>
+  <include file="/db/changelog/nerv-audit/002-test-create-user-audit-table.xml"/>
+  <include file="/db/changelog/nerv-audit/003-test-create-revinfo-table.xml"/>
+
+</databaseChangeLog>

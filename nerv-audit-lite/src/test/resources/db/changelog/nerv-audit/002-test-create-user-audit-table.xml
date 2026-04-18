@@ -1,0 +1,19 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+  <!-- Added vertical audit table (column names match AuditRepository SELECT: rev, revtype) -->
+  <changeSet id="002-create-user-audit-table-1" author="czetsuya">
+    <createTable tableName="user_account_aud">
+      <column name="id" type="bigint"></column>
+      <column name="rev" type="bigint"></column>
+      <column name="revtype" type="bigint"></column>
+      <column name="updated_by" type="varchar(255)"></column>
+      <column name="updated" type="timestamp"></column>
+      <column name="field_name" type="varchar(255)"></column>
+      <column name="old_value" type="varchar(255)"></column>
+      <column name="new_value" type="varchar(255)"></column>
+    </createTable>
+  </changeSet>
+
+</databaseChangeLog>

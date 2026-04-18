@@ -1,0 +1,36 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+  <changeSet id="001-create-user-table-1" author="czetsuya">
+    <createSequence sequenceName="user_seq" startValue="1" incrementBy="1"/>
+  </changeSet>
+
+  <changeSet id="001-create-user-table-2" author="czetsuya">
+    <createTable tableName="user_account">
+      <column name="id" type="BIGINT" defaultValueSequenceNext="user_seq">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="first_name" type="varchar(255)"/>
+      <column name="last_name" type="varchar(255)"/>
+      <column name="birth_date" type="timestamp"/>
+    </createTable>
+
+    <createTable tableName="user_hobby">
+      <column name="user_id" type="bigint">
+        <constraints nullable="false"/>
+      </column>
+      <column name="hobby" type="varchar(255)"/>
+    </createTable>
+  </changeSet>
+
+  <changeSet id="001-create-user-table-3" author="czetsuya">
+    <addForeignKeyConstraint
+        baseTableName="user_hobby"
+        baseColumnNames="user_id"
+        referencedTableName="user_account"
+        referencedColumnNames="id"
+        constraintName="fk_user_hobby"/>
+  </changeSet>
+
+</databaseChangeLog>

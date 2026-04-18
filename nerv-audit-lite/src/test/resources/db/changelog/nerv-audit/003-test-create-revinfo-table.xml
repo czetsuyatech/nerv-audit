@@ -1,0 +1,15 @@
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+  <!-- Hibernate Envers revision tracking table -->
+  <changeSet id="003-create-revinfo-table-1" author="czetsuya">
+    <createTable tableName="REVINFO">
+      <column name="REV" type="INTEGER" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false"/>
+      </column>
+      <column name="REVTSTMP" type="BIGINT"/>
+    </createTable>
+  </changeSet>
+
+</databaseChangeLog>

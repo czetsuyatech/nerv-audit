@@ -184,6 +184,8 @@ Response shape:
 The screenshots below show real requests and responses using the nerv-audit web endpoint against the
 reference implementation.
 
+Postman collection available in the demo project.
+
 ### Horizontal Audit — Get Revisions
 
 Returns audit rows in a **horizontal** format: each row represents one revision of the entire
@@ -246,11 +248,11 @@ mvn -pl nerv-audit-core -am clean install
 mvn -pl nerv-audit-spring-boot-starter -am clean install
 ```
 
-## Examples
+## Demos
 
 Reference implementation and usage examples are available in:
 
-- https://github.com/czetsuyatech/nerv-examples/tree/main/spring-envers-nerv-example
+- https://github.com/czetsuyatech/nerv-demos/tree/main/nerv-audit-spring-boot-audit-trail-demo
 
 ## Services I Offer (Hire Me)
 

@@ -6,12 +6,11 @@
   <parent>
     <groupId>com.czetsuyatech.nerv</groupId>
     <artifactId>nerv-audit</artifactId>
-    <version>LATEST-SNAPSHOT</version>
+    <version>1.2.0</version>
   </parent>
 
   <groupId>com.czetsuyatech.nerv</groupId>
   <artifactId>nerv-audit-spring-boot-starter</artifactId>
-  <version>LATEST-SNAPSHOT</version>
   <name>NERV | Audit Web</name>
 
   <dependencies>

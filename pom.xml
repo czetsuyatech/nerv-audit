@@ -12,7 +12,7 @@
 
   <groupId>com.czetsuyatech.nerv</groupId>
   <artifactId>nerv-audit</artifactId>
-  <version>LATEST-SNAPSHOT</version>
+  <version>1.2.0</version>
   <packaging>pom</packaging>
   <name>NERV | Audit</name>
   <description>Core auditing library with Envers integration, query model, and SQL builder.
@@ -42,7 +42,7 @@
   </scm>
 
   <properties>
-    <java.version>25</java.version>
+    <java.version>21</java.version>
     <liquibase.version>5.0.2</liquibase.version>
     <jjwt.version>0.13.0</jjwt.version>
   </properties>

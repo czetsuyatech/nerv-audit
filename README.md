@@ -1,280 +1,91 @@
-🚀 **Now available on Maven Central**  
-Get started: https://www.czetsuyatech.com/2026/04/spring-boot-audit-trail-hibernate-envers.html
-
----
-
 # NERV Audit
 
-Production-oriented audit trail starter for Spring Boot applications, built on Hibernate Envers with
-a clean API for querying historical changes.
-
-Built by **Czetsuya Tech** for teams that want traceability, compliance support, and
-developer-friendly integration without reinventing audit infrastructure.
-
-## Why This Exists
-
-Most teams need reliable change tracking, but building and maintaining audit tooling consumes time
-better spent on product features.
-
-`nerv-audit` gives you:
-
-- Auto-configured Envers listener customization
-- Extension points for custom audit-table resolution
-
-## Editions
-
-### Lite
-
-- JPA `create` operation auditing
-- Vertical or horizontal audit strategies
-- Queryable audit controller/web endpoint for application-level audit browsing
-
-### Pro
-
-- JPA `create`, `update`, and `delete` operation auditing
-- JPA auditing of a `list` property
-- Vertical or horizontal audit strategies
-- Queryable audit controller/web endpoint for application-level audit browsing
-
-## Core Value for Clients
-
-This project is also a showcase of how I deliver software services as an IT programmer:
-
-- I design reusable, modular libraries (not one-off hacks)
-- I ship maintainable Spring Boot infrastructure with clear extension points
-- I focus on production concerns: observability, consistency, and operational simplicity
-- I can turn internal platform utilities like this into product-grade components for your
-  organization
+NERV Audit is an open-source Java 21 audit-trail library for Spring Boot applications. It has a
+stable API boundary, a Hibernate Envers implementation, a transport-independent operations API, and
+an optional HTTP management surface.
 
 ## Modules
 
-- `nerv-audit-api`: Core contracts, annotations, and DTOs for audit operations, including
-  horizontal/vertical auditing models and service interfaces
-- `nerv-audit-core`: Envers listeners, audit work units, query model, SQL builder,
-  repository/service providing full vertical and horizontal entity versioning with audit querying
-- `nerv-audit-lite`: Envers-based implementation providing simplified configuration, vertical and
-  horizontal entity versioning, and basic audit querying
-- `nerv-audit-spring-boot-starter`: Spring Boot auto-configuration and optional web endpoint
+- `nerv-audit-api` contains public contracts, DTOs, query models, enums, and extension points.
+- `nerv-audit-core` implements the contracts with Hibernate Envers listeners, repositories, query
+  builders, and audit services.
+- `nerv-audit-operations` provides transport-independent, read-only audit search and history
+  operations by delegating to Core.
+- `nerv-audit-operations-web` provides optional Spring MVC management endpoints over Operations.
+- `nerv-audit-spring-boot-starter` aggregates the four modules and is the recommended dependency
+  for Spring Boot applications.
 
-## Tech Stack
+## Requirements
 
-- Java `25`
-- Maven multi-module build
-- Spring Boot `4.0.4`
-- Spring Data JPA
-- Hibernate Envers
+- Java 21
+- Maven 3.9 or newer
+- Spring Boot 4.x and Hibernate Envers in the consuming application
 
-## Quick Start
+## Installation
 
-### 1. Add dependency
-
-If you publish this artifact to your internal/external Maven repository, add:
+Add the starter. It brings in Core, Operations, and Operations Web transitively and requires no
+manual assembly, license, activation, additional repository, or credentials.
 
 ```xml
-
-<dependencies>
-  <dependency>
-    <groupId>com.czetsuyatech</groupId>
-    <artifactId>nerv-audit-spring-boot-starter</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-  </dependency>
-
-  <dependency>
-    <groupId>com.czetsuyatech</groupId>
-    <artifactId>nerv-audit-core</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-  </dependency>
-</dependencies>
-
+<dependency>
+  <groupId>com.czetsuyatech.nerv</groupId>
+  <artifactId>nerv-audit-spring-boot-starter</artifactId>
+  <version>2.0.0</version>
+</dependency>
 ```
 
-### 2. Enable the web endpoint (Pro)
+## Basic configuration
 
 ```yaml
 nerv:
   audit:
-    web:
-      enabled: true
-```
-
-### 3. Configure behavior (optional)
-
-```yaml
-nerv:
-  audit:
-    audit-strategy-type: VERTICAL # VERTICAL (default) | HORIZONTAL
-    audit-insert: false           # default false
+    audit-strategy-type: VERTICAL # VERTICAL (default) or HORIZONTAL
+    audit-insert: false
     audit-fields: createdBy,created,updatedBy,updated,originalId,revisionType,version
+    operations:
+      web:
+        enabled: true
+        base-path: /management/nerv-audit
 ```
 
-Defaults are driven by `AuditConfig`:
+Entities must be Envers-versioned, for example with `@Audited`. Define an `AuditTableResolver` bean
+to override the default `{entity-table}_AUD` table resolution.
 
-- `auditStrategyType`: `VERTICAL`
-- `auditInsert`: `false`
-- `auditFields`: falls back to framework defaults if not set
+## Usage
 
-### 4. Configure license (optional)
+With `nerv.audit.operations.web.enabled=true`, the starter exposes its opt-in operations surface:
 
-```yaml
-nerv:
-  audit:
-    license:
-      key:
-      public-key: czetsuyatech_nerv_public.pem
-      enabled: true
+```text
+GET /management/nerv-audit/audits/vertical
+GET /management/nerv-audit/audits/vertical/{entity}
+GET /management/nerv-audit/audits/horizontal/{entity}
 ```
 
-- `key`: customer's key which gives PRO access to users
-- `public-key`: PEM-encoded public key for license verification/built-in
-- `enabled`: `true` to enable license verification, `false` to disable
+Vertical audit queries support filters such as `id`, `revisionNo`, `updatedBy`, `fieldName`,
+`newValue`, `oldValue`, `fromDate`, `toDate`, `sortBy`, `sortDirection`, `page`, and `size`.
 
-Default license runs with the LITE version.
-
-## REST API
-
-The REST API is available in **Pro**. When `nerv.audit.web.enabled=true`, the starter exposes:
-
-- `GET /nerv-audit/[horizontal/vertical]/{entity}`
-
-Supported query params (vertical strategy only):
-
-- `id`
-- `revisionNo`
-- `updatedBy`
-- `fieldName`
-- `newValue` (contains/LIKE filter)
-- `fromDate` (ISO-8601 instant)
-- `toDate` (ISO-8601 instant)
-- `offset` (default `0`)
-- `limit` (default `10` in repository)
-- `sortBy` (`id`, `field_name`, `rev`, `updated`, `updated_by`)
-- `sortDirection` (`ASC` default, `DESC`)
-
-Example:
-
-```http
-GET /nerv-audit/vertical/UserEntity?id=101&updatedBy=admin&limit=20&sortBy=updated&sortDirection=DESC
+```text
+GET /management/nerv-audit/audits/vertical/UserEntity?id=101&updatedBy=admin&page=0&size=20
 ```
 
-Response shape:
+For advanced integrations, depend directly on the individual module that owns the needed boundary.
+Normal Spring Boot applications should depend only on the starter.
 
-```json
-{
-  "content": [
-    {
-      "id": 101,
-      "revisionNo": 99,
-      "revisionType": 1,
-      "updatedBy": "admin",
-      "updated": "2026-03-31T13:15:00Z",
-      "fieldName": "lastName",
-      "oldValue": "Doe",
-      "newValue": "Smith",
-      "entityName": "USER_ACCOUNT_AUD"
-    }
-  ],
-  "total": 1,
-  "offset": 0,
-  "limit": 20
-}
-```
+## Build and test
 
-## Postman Examples
-
-The screenshots below show real requests and responses using the nerv-audit web endpoint against the
-reference implementation.
-
-Postman collection available in the demo project.
-
-### Horizontal Audit — Get Revisions
-
-Returns audit rows in a **horizontal** format: each row represents one revision of the entire
-entity,
-with all audited fields as columns.
-
-**Request**
-
-```
-GET /nerv-audit/horizontal/UserEntity?offset=2&limit=10
-```
-
-![Horizontal Audit - Get Revisions](docs/images/horizontal-audit-get-revisions.png)
-
----
-
-### Vertical Audit — Get Revisions
-
-Returns audit rows in a **vertical** format: each row represents a single field change within a
-revision, making it easy to see exactly what changed, from what old value, to what new value.
-
-**Request | Paging**
-
-```
-GET /nerv-audit/vertical/com.czetsuyatech.envers.persistence.entity.UserEntity?offset=2&limit=2
-```
-
-![Vertical Audit - Get Paged Revisions](docs/images/vertical-audit-get-paged-revisions.png)
-
-**Request | Filter by Old, New**
-
-```
-GET /nerv-audit/vertical/com.czetsuyatech.envers.persistence.entity.UserEntity?fieldName=FIRSTNAME&oldValue=Edward&newValue=czetsuya
-```
-
-![Vertical Audit - Get Filtered Revisions](docs/images/vertical-audit-get-filtered-revisions.png)
-
----
-
-## Important Integration Notes
-
-- Entities must be Envers-versioned (for example, `@Audited`) so listeners can process them.
-- Default audit table resolution maps `{EntityTable}` to `{EntityTable}_AUD`.
-- You can override table resolution by defining your own `AuditTableResolver` bean.
-- Vertical strategy expects audit rows compatible with fields used by `AuditRepository` (`id`,
-  `rev`, `revtype`, `updated_by`, `updated`, `field_name`, `old_value`, `new_value`).
-
-## Build & Test
-
-From repository root:
+Run the complete build from the repository root:
 
 ```bash
 mvn clean verify
 ```
 
-Build individual modules:
+To install the artifacts for local development:
 
 ```bash
-mvn -pl nerv-audit-core -am clean install
-mvn -pl nerv-audit-spring-boot-starter -am clean install
+mvn clean install
 ```
 
-## Demos
+## License and issues
 
-Reference implementation and usage examples are available in:
-
-- https://github.com/czetsuyatech/nerv-demos/tree/main/nerv-audit-spring-boot-audit-trail-demo
-
-## Services I Offer (Hire Me)
-
-I can implement this same engineering approach for your company:
-
-- Spring Boot architecture and backend platform engineering
-- Audit/compliance pipelines for regulated or enterprise systems
-- Legacy modernization and modularization
-- API design, performance hardening, and production readiness
-- Custom starter libraries and internal developer platforms
-
-Typical engagement models:
-
-- Project-based delivery
-- Part-time fractional engineering
-- Full feature ownership with handover documentation
-
-## Collaboration
-
-If you want this library adapted for your domain (multi-tenant, event streaming, SIEM integration,
-custom revision metadata), I can provide a scoped implementation plan and timeline.
-
----
-
-Created by **Czetsuya Tech**.
+NERV Audit is licensed under the [Apache License 2.0](LICENSE.md). Report bugs or feature requests
+through the repository's GitHub issues page.

@@ -1,0 +1,76 @@
+package com.czetsuyatech.nerv.audit.autoconfigure;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
+import com.czetsuyatech.nerv.audit.config.AuditConfig;
+import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
+import com.czetsuyatech.nerv.audit.infrastructure.envers.listener.NervEnversListenerConfigurer;
+import com.czetsuyatech.nerv.audit.persistence.AuditSqlBuilder;
+import com.czetsuyatech.nerv.audit.persistence.AuditTableResolver;
+import com.czetsuyatech.nerv.audit.persistence.repository.AuditRepository;
+import com.czetsuyatech.nerv.audit.service.AuditService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.envers.boot.internal.EnversService;
+import org.hibernate.event.service.spi.EventListenerRegistry;
+import org.hibernate.service.spi.ServiceRegistryImplementor;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+class NervAuditAutoConfigurationTest {
+
+  private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+      .withConfiguration(AutoConfigurations.of(NervAuditAutoConfiguration.class))
+      .withBean(EntityManagerFactory.class, NervAuditAutoConfigurationTest::entityManagerFactory)
+      .withBean(EntityManager.class, () -> mock(EntityManager.class));
+
+  @Test
+  void createsTheCoreAuditImplementationThroughExplicitConfiguration() {
+    contextRunner.run(context -> {
+      assertThat(context).hasSingleBean(AuditConfig.class);
+      assertThat(context).hasSingleBean(AuditSqlBuilder.class);
+      assertThat(context).hasSingleBean(AuditTableResolver.class);
+      assertThat(context).hasSingleBean(AuditRepository.class);
+      assertThat(context).hasSingleBean(AuditService.class);
+      assertThat(context).hasSingleBean(NervEnversListenerConfigurer.class);
+    });
+  }
+
+  @Test
+  void bindsTheNervAuditProperties() {
+    contextRunner.withPropertyValues(
+        "nerv.audit.audit-strategy-type=HORIZONTAL",
+        "nerv.audit.audit-insert=true",
+        "nerv.audit.audit-fields=updatedBy,updated"
+    ).run(context -> {
+      AuditConfig config = context.getBean(AuditConfig.class);
+      assertThat(config.getAuditStrategyType()).isEqualTo(AuditStrategyType.HORIZONTAL);
+      assertThat(config.isAuditInsert()).isTrue();
+      assertThat(config.getAuditFields()).containsExactly("updatedBy", "updated");
+    });
+  }
+
+  @Test
+  void keepsTheAuditServiceUserOverridable() {
+    AuditService customService = mock(AuditService.class);
+
+    contextRunner.withBean(AuditService.class, () -> customService).run(context ->
+        assertThat(context.getBean(AuditService.class)).isSameAs(customService)
+    );
+  }
+
+  private static EntityManagerFactory entityManagerFactory() {
+    EntityManagerFactory entityManagerFactory = mock(EntityManagerFactory.class);
+    SessionFactoryImplementor sessionFactory = mock(SessionFactoryImplementor.class);
+    ServiceRegistryImplementor serviceRegistry = mock(ServiceRegistryImplementor.class);
+    org.mockito.Mockito.when(entityManagerFactory.unwrap(SessionFactoryImplementor.class)).thenReturn(sessionFactory);
+    org.mockito.Mockito.when(sessionFactory.getServiceRegistry()).thenReturn(serviceRegistry);
+    org.mockito.Mockito.when(serviceRegistry.getService(EnversService.class)).thenReturn(mock(EnversService.class));
+    org.mockito.Mockito.when(serviceRegistry.getService(EventListenerRegistry.class))
+        .thenReturn(mock(EventListenerRegistry.class));
+    return entityManagerFactory;
+  }
+}

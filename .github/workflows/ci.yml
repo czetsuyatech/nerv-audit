@@ -5,14 +5,18 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, reopened, synchronize, edited, ready_for_review]
+
+permissions:
+  contents: read
 
 jobs:
-  ci:
-    uses: czetsuyatech/nerv-actions/.github/workflows/ci.yml@main
-    with:
-      javaVersion: '25'
-    secrets:
-      githubToken: ${{ secrets.GH_PKG_TOKEN }}
-      githubAppId: ${{ secrets.NERV_RELEASE_APP_ID }}
-      githubAppPrivateKey: ${{ secrets.NERV_RELEASE_APP_PRIVATE_KEY }}
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn --batch-mode clean verify

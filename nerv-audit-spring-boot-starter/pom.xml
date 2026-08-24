@@ -6,57 +6,35 @@
   <parent>
     <groupId>com.czetsuyatech.nerv</groupId>
     <artifactId>nerv-audit</artifactId>
-    <version>1.2.0</version>
+    <version>2.0.0</version>
   </parent>
 
   <groupId>com.czetsuyatech.nerv</groupId>
   <artifactId>nerv-audit-spring-boot-starter</artifactId>
-  <name>NERV | Audit Web</name>
+  <name>NERV | Audit Spring Boot Starter</name>
+  <description>Spring Boot starter that assembles NERV Audit, its operations API, and optional web operations.</description>
 
   <dependencies>
     <dependency>
       <groupId>com.czetsuyatech.nerv</groupId>
-      <artifactId>nerv-audit-api</artifactId>
+      <artifactId>nerv-audit-core</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>com.czetsuyatech.nerv</groupId>
-      <artifactId>nerv-audit-lite</artifactId>
+      <artifactId>nerv-audit-operations</artifactId>
       <version>${project.version}</version>
-      <optional>true</optional>
-    </dependency>
-
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-autoconfigure</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-validation</artifactId>
+      <groupId>com.czetsuyatech.nerv</groupId>
+      <artifactId>nerv-audit-operations-web</artifactId>
+      <version>${project.version}</version>
     </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-webmvc-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
-      <scope>provided</scope>
     </dependency>
   </dependencies>
 </project>

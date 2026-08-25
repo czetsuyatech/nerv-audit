@@ -1,5 +1,5 @@
 THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
-nerv-audit Pro — Czetsuya Tech
+NERV Audit — Czetsuya Tech
 April 2026
 
 This product incorporates components from the following open-source projects.
@@ -49,9 +49,9 @@ Each component is governed by its respective license, reproduced or referenced b
    URL:        https://hibernate.org/orm
    License URL: https://www.gnu.org/licenses/lgpl-2.1.html
 
-   NOTE: LGPL 2.1 permits use and linking in proprietary software provided
+   NOTE: LGPL 2.1 permits use and linking in applications provided
    that the LGPL-licensed component is used in unmodified form or that
-   modifications are made available. nerv-audit Pro does not modify Hibernate ORM
+   modifications are made available. NERV Audit does not modify Hibernate ORM
    or Hibernate Envers source code.
 
 -------------------------------------------------------------------------------
@@ -87,7 +87,7 @@ Each component is governed by its respective license, reproduced or referenced b
    License URL: https://h2database.com/html/license.html
 
    H2 is used exclusively as a test dependency. It is not included in or
-   distributed with production binaries of nerv-audit Pro.
+   distributed with production binaries of NERV Audit.
 
 -------------------------------------------------------------------------------
 
@@ -100,7 +100,7 @@ Each component is governed by its respective license, reproduced or referenced b
    License URL: https://www.apache.org/licenses/LICENSE-2.0
 
    Liquibase is used exclusively as a test dependency. It is not included in or
-   distributed with production binaries of nerv-audit Pro.
+   distributed with production binaries of NERV Audit.
 
 -------------------------------------------------------------------------------
 
@@ -123,5 +123,5 @@ Full license text: https://www.apache.org/licenses/LICENSE-2.0
 -------------------------------------------------------------------------------
 
 © 2026 Czetsuya Tech. All rights reserved.
-nerv-audit Pro proprietary source code and compilation are NOT covered by the
-licenses listed above. See LICENSE.md for terms governing nerv-audit Pro.
+NERV Audit source code is licensed under the Apache License 2.0. See LICENSE.md for the
+project license notice.

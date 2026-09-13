@@ -3,13 +3,11 @@ package com.czetsuyatech.nerv.audit.infrastructure.envers.workunit;
 import static com.czetsuyatech.nerv.audit.infrastructure.envers.AuditConstant.AUDIT_UPDATED;
 import static com.czetsuyatech.nerv.audit.infrastructure.envers.AuditConstant.AUDIT_UPDATED_BY;
 
-import jakarta.persistence.Table;
+import com.czetsuyatech.nerv.audit.persistence.AuditTimestampConverter;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
@@ -28,16 +26,13 @@ import org.springframework.util.StringUtils;
  */
 public class NervAuditWorkUnit {
 
-  private static final String DEFAULT_SCHEMA_PROPERTY = "hibernate.default_schema";
   private static final String VERTICAL_INSERT_SQL = """
       INSERT INTO %s
       (id, %s, %s, field_name, old_value, new_value, updated_by, updated)
       VALUES 
       (:id, :revisionType, :revisionId, :fieldName, :oldValue, :newValue, :updatedBy, :updated) 
       """;
-  private transient volatile Class<?> entityClassCache;
   private final EnversService enversService;
-  private final String tableName;
   private final String entityName;
   private final String revisionTypePropName;
   private final String revisionFieldName;
@@ -56,7 +51,6 @@ public class NervAuditWorkUnit {
     this.revisionType = Objects.requireNonNull(revisionType, "revisionType");
     this.revisionTypePropName = enversService.getConfig().getRevisionTypePropertyName();
     this.revisionFieldName = enversService.getConfig().getRevisionFieldName();
-    this.tableName = getAuditTableName();
   }
 
   public void perform(
@@ -72,15 +66,19 @@ public class NervAuditWorkUnit {
     log.debug("perform for={}, fieldName={}, oldValue={}, newValue={}", entityName, fieldName, oldValue, newValue);
 
     final SessionFactoryImplementor sfi = sessionImplementor.getSessionFactory();
-    final String schemaName = (String) sfi.getProperties().get(DEFAULT_SCHEMA_PROPERTY);
     final NativeQuery<?> query = sessionImplementor.createNativeQuery(
-        getVerticalTableInsert(schemaName, auditTableName));
+        getVerticalTableInsert(sfi.getMappingMetamodel().getEntityDescriptor(
+            auditTableName != null ? auditTableName : enversService.getConfig().getAuditEntityName(entityName))
+            .getTableName()));
+    // Sequence-backed revision inserts may still be queued when this native INSERT runs.
+    // Synchronize its query space so the revision FK is valid even with native Hibernate bootstrapping.
+    query.addSynchronizedEntityName(enversService.getConfig().getRevisionInfo().getRevisionInfoEntityName());
     final long safeId = (id != null) ? id : 0L;
     final String fieldNameUpper = (fieldName == null)
         ? null
         : fieldName.toUpperCase(Locale.ROOT);
     final String updatedBy = resolveUpdatedBy();
-    final Object updated = resolveUpdated();
+    final Instant updated = resolveUpdated();
 
     query.setParameter("id", safeId);
     query.setParameter("revisionType", revisionType.ordinal());
@@ -89,7 +87,7 @@ public class NervAuditWorkUnit {
     query.setParameter("oldValue", oldValue);
     query.setParameter("newValue", newValue);
     query.setParameter(AUDIT_UPDATED_BY, updatedBy, StandardBasicTypes.STRING);
-    query.setParameter(AUDIT_UPDATED, updated);
+    query.setParameter(AUDIT_UPDATED, updated, StandardBasicTypes.INSTANT);
 
     query.executeUpdate();
   }
@@ -109,77 +107,19 @@ public class NervAuditWorkUnit {
         : "SYSTEM";
   }
 
-  private Object resolveUpdated() {
+  private Instant resolveUpdated() {
 
     if (auditFieldsValues != null) {
       final Object v = auditFieldsValues.get(AUDIT_UPDATED.toUpperCase(Locale.ROOT));
       if (v != null) {
-        return v;
+        return AuditTimestampConverter.toInstant(v, "vertical insert entity=" + entityName + ", column=updated");
       }
     }
 
     return Instant.now();
   }
 
-  private String getVerticalTableInsert(String schemaName, String auditTableName) {
-
-    final String resolvedTable = resolveAuditTableName(schemaName, auditTableName);
-    return String.format(VERTICAL_INSERT_SQL, resolvedTable, revisionTypePropName, revisionFieldName);
-  }
-
-  private String resolveAuditTableName(String schemaName, String auditTableName) {
-
-    String table = (auditTableName != null) ? auditTableName : tableName;
-    if (!StringUtils.hasText(table)) {
-      throw new IllegalStateException("Audit table does not exists for entity=" + entityName);
-    }
-
-    if (StringUtils.hasText(schemaName) && table.indexOf('.') == -1) {
-      table = schemaName + '.' + table;
-    }
-
-    return table;
-  }
-
-  private <T> T withEntityClass(Function<Class<?>, T> fn) {
-
-    Class<?> c = entityClassCache;
-    if (c == null) {
-      synchronized (this) {
-        c = entityClassCache;
-        if (c == null) {
-          c = tryLoadEntityClass(entityName)
-              .orElse(null);
-          entityClassCache = c;
-        }
-      }
-    }
-
-    return (c != null) ? fn.apply(c) : null;
-  }
-
-  private Optional<Class<?>> tryLoadEntityClass(String fqcn) {
-
-    try {
-      return Optional.of(Class.forName(fqcn));
-
-    } catch (ClassNotFoundException ignored) {
-      return Optional.empty();
-    }
-  }
-
-  private String getSingleEntityNameIntern() {
-    return withEntityClass(c -> c.getSimpleName().toUpperCase(Locale.ROOT));
-  }
-
-  private String getAuditTableName() {
-
-    return withEntityClass(c -> {
-      final Table table = c.getAnnotation(Table.class);
-      final String baseTableName = (table != null)
-          ? table.name()
-          : null;
-      return enversService.getConfig().getAuditTableName(entityName, baseTableName);
-    });
+  private String getVerticalTableInsert(String auditTableName) {
+    return String.format(VERTICAL_INSERT_SQL, auditTableName, revisionTypePropName, revisionFieldName);
   }
 }

@@ -19,4 +19,4 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: mvn --batch-mode clean verify
+      - run: mvn --batch-mode clean verify -Ppostgresql

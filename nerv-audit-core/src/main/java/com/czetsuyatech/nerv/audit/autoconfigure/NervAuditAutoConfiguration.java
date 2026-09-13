@@ -10,6 +10,11 @@ import com.czetsuyatech.nerv.audit.service.AuditServiceImpl;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.Optional;
+import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
+import com.czetsuyatech.nerv.audit.persistence.VerticalAuditSchemaValidator;
+import org.hibernate.envers.boot.internal.EnversService;
+import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.envers.AuditReaderFactory;
@@ -28,6 +33,24 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnClass({AuditReaderFactory.class, EntityManagerFactory.class})
 @EnableConfigurationProperties(AuditProperties.class)
 public class NervAuditAutoConfiguration {
+
+  @Bean
+  @ConditionalOnMissingBean
+  public VerticalAuditSchemaValidator verticalAuditSchemaValidator() {
+    return new VerticalAuditSchemaValidator();
+  }
+
+  @Bean
+  @ConditionalOnProperty(prefix = "nerv.audit.vertical.schema-validation", name = "enabled", matchIfMissing = true)
+  public SmartInitializingSingleton verticalAuditSchemaValidation(
+      EntityManagerFactory entityManagerFactory, AuditConfig config, VerticalAuditSchemaValidator validator,
+      AuditTableResolver resolver) {
+    return () -> {
+      if (config.getAuditStrategyType() == AuditStrategyType.VERTICAL) {
+        validator.validate(entityManagerFactory, resolver);
+      }
+    };
+  }
 
   @Bean
   @ConditionalOnMissingBean
@@ -80,7 +103,12 @@ public class NervAuditAutoConfiguration {
       try {
         SessionFactoryImplementor sessionFactory = entityManagerFactory.unwrap(SessionFactoryImplementor.class);
         EntityPersister persister = sessionFactory.getMappingMetamodel().getEntityDescriptor(entityName);
-        return Optional.of(persister.getTableName() + "_AUD");
+        EnversService envers = sessionFactory.getServiceRegistry().getService(EnversService.class);
+        if (!envers.getEntitiesConfigurations().isVersioned(persister.getEntityName())) {
+          return Optional.empty();
+        }
+        return Optional.of(sessionFactory.getMappingMetamodel().getEntityDescriptor(
+            envers.getConfig().getAuditEntityName(persister.getEntityName())).getTableName());
       } catch (Exception exception) {
         log.warn("Could not resolve audit table for entity '{}': {}", entityName, exception.getMessage());
         return Optional.empty();

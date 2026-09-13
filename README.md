@@ -71,12 +71,20 @@ GET /management/nerv-audit/audits/vertical/UserEntity?id=101&updatedBy=admin&pag
 For advanced integrations, depend directly on the individual module that owns the needed boundary.
 Normal Spring Boot applications should depend only on the starter.
 
+## Vertical audit persistence
+
+Use the [PostgreSQL migration and validation guide](docs/vertical-audit-persistence.md) for
+production schema setup, UTC timestamp semantics, existing-schema upgrades and default-on
+startup validation. Production vertical audit uses explicit migrations with `ddl-auto=none`.
+
 ## Build and test
 
 Run the complete build from the repository root:
 
 ```bash
 mvn clean verify
+# Real PostgreSQL integration coverage (Docker required):
+mvn clean verify -Ppostgresql
 ```
 
 To install the artifacts for local development:

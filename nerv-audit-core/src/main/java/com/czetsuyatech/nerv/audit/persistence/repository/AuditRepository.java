@@ -7,8 +7,7 @@ import com.czetsuyatech.nerv.audit.persistence.AuditSqlBuilder;
 import com.czetsuyatech.nerv.audit.persistence.AuditTableResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import com.czetsuyatech.nerv.audit.persistence.AuditTimestampConverter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -88,7 +87,7 @@ public class AuditRepository {
         ((Number) r[1]).longValue(),
         ((Number) r[2]).longValue(),
         (String) r[3],
-        ((LocalDateTime) r[4]).atZone(ZoneId.systemDefault()).toInstant(),
+        AuditTimestampConverter.toInstant(r[4], "vertical history table=" + r[8] + ", rev=" + r[1] + ", column=updated"),
         (String) r[5],
         (String) r[6],
         (String) r[7],

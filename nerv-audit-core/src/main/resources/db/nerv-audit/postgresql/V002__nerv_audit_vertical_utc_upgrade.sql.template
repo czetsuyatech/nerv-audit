@@ -1,0 +1,16 @@
+-- EXISTING installations only. Render once for each affected audit table.
+-- Precondition: historical zone-free values have been verified to represent UTC.
+-- If they represent another zone, use that verified zone instead; mixed-zone data needs a data repair.
+-- Do not run on a timestamptz column: the precondition check prevents reinterpretation.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = '${auditTable}'::regclass AND attname = 'updated'
+          AND atttypid = 'timestamp without time zone'::regtype AND NOT attisdropped
+    ) THEN
+        RAISE EXCEPTION 'NERV Audit UTC upgrade requires a timestamp without time zone updated column';
+    END IF;
+END $$;
+ALTER TABLE ${auditTable}
+    ALTER COLUMN updated TYPE timestamp with time zone USING updated AT TIME ZONE 'UTC';

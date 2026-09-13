@@ -7,6 +7,7 @@ import com.czetsuyatech.nerv.audit.config.AuditConfig;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.listener.NervEnversListenerConfigurer;
 import com.czetsuyatech.nerv.audit.persistence.AuditSqlBuilder;
+import com.czetsuyatech.nerv.audit.persistence.VerticalAuditSchemaValidator;
 import com.czetsuyatech.nerv.audit.persistence.AuditTableResolver;
 import com.czetsuyatech.nerv.audit.persistence.repository.AuditRepository;
 import com.czetsuyatech.nerv.audit.service.AuditService;
@@ -24,6 +25,7 @@ class NervAuditAutoConfigurationTest {
 
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
       .withConfiguration(AutoConfigurations.of(NervAuditAutoConfiguration.class))
+      .withPropertyValues("nerv.audit.vertical.schema-validation.enabled=false")
       .withBean(EntityManagerFactory.class, NervAuditAutoConfigurationTest::entityManagerFactory)
       .withBean(EntityManager.class, () -> mock(EntityManager.class));
 
@@ -60,6 +62,27 @@ class NervAuditAutoConfigurationTest {
     contextRunner.withBean(AuditService.class, () -> customService).run(context ->
         assertThat(context.getBean(AuditService.class)).isSameAs(customService)
     );
+  }
+
+  @Test
+  void validationIsDefaultOnAndUsesTheEffectiveAuditConfig() {
+    var validator = mock(VerticalAuditSchemaValidator.class);
+    contextRunner.withPropertyValues("nerv.audit.vertical.schema-validation.enabled=true")
+        .withBean(VerticalAuditSchemaValidator.class, () -> validator)
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          org.mockito.Mockito.verify(validator).validate(context.getBean(EntityManagerFactory.class),
+              context.getBean(AuditTableResolver.class));
+          assertThat(context.getBean(AuditProperties.class).getVertical().getSchemaValidation().isEnabled()).isTrue();
+        });
+    org.mockito.Mockito.reset(validator);
+    contextRunner.withPropertyValues("nerv.audit.vertical.schema-validation.enabled=true")
+        .withBean(VerticalAuditSchemaValidator.class, () -> validator)
+        .withBean(AuditConfig.class, () -> AuditConfig.builder().auditStrategyType(AuditStrategyType.HORIZONTAL).build())
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          org.mockito.Mockito.verifyNoInteractions(validator);
+        });
   }
 
   private static EntityManagerFactory entityManagerFactory() {

@@ -2,6 +2,7 @@ package com.czetsuyatech.nerv.audit.infrastructure.envers.listener;
 
 import com.czetsuyatech.nerv.audit.config.AuditConfig;
 import jakarta.persistence.EntityManagerFactory;
+import java.time.Clock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -20,6 +21,11 @@ public class NervEnversListenerConfigurer implements InitializingBean {
 
   private final EntityManagerFactory entityManagerFactory;
   private final AuditConfig auditConfig;
+  private final Clock clock;
+
+  public NervEnversListenerConfigurer(EntityManagerFactory entityManagerFactory, AuditConfig auditConfig) {
+    this(entityManagerFactory, auditConfig, Clock.systemUTC());
+  }
 
   @Override
   public void afterPropertiesSet() {
@@ -39,38 +45,39 @@ public class NervEnversListenerConfigurer implements InitializingBean {
             enversService,
             auditStrategyType,
             auditFields,
-            auditConfig.isAuditInsert()));
+            auditConfig.isAuditInsert(),
+            clock));
     register(registry, EventType.POST_DELETE,
         new NervEnversPostDeleteEventListenerImpl(
             enversService,
             auditStrategyType,
-            auditFields
-        ));
+            auditFields,
+            clock));
 
     register(registry, EventType.POST_UPDATE,
         new NervEnversPostUpdateEventListenerImpl(
             enversService,
             auditStrategyType,
-            auditFields
-        ));
+            auditFields,
+            clock));
     register(registry, EventType.POST_COLLECTION_RECREATE,
         new NervEnversPostCollectionRecreateEventListenerImpl(
             enversService,
             auditStrategyType,
-            auditFields
-        ));
+            auditFields,
+            clock));
     register(registry, EventType.PRE_COLLECTION_REMOVE,
         new NervEnversPreCollectionRemoveEventListenerImpl(
             enversService,
             auditStrategyType,
-            auditFields
-        ));
+            auditFields,
+            clock));
     register(registry, EventType.PRE_COLLECTION_UPDATE,
         new NervEnversPreCollectionUpdateEventListenerImpl(
             enversService,
             auditStrategyType,
-            auditFields
-        ));
+            auditFields,
+            clock));
 
     log.info("NERV | Audit successfully started");
   }

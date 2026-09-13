@@ -3,12 +3,14 @@ package com.czetsuyatech.nerv.audit.infrastructure.envers.workunit;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.exception.MergePersistentCollectionChangeWorkUnitException;
 import java.io.Serializable;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Session;
 import org.hibernate.collection.spi.PersistentCollection;
@@ -29,6 +31,8 @@ import org.hibernate.envers.internal.synchronization.work.WorkUnitMergeVisitor;
  */
 public class NervPersistentCollectionChangeWorkUnit extends PersistentCollectionChangeWorkUnit {
 
+  private final Clock clock;
+
   private final List<PersistentCollectionChangeData> collectionChanges;
   private final String referencingPropertyName;
   private final AuditStrategyType auditStrategyType;
@@ -47,9 +51,38 @@ public class NervPersistentCollectionChangeWorkUnit extends PersistentCollection
       String referencingPropertyName,
       AuditStrategyType auditStrategyType,
       List<String> auditFields) {
+    this(
+        sessionImplementor,
+        entityName,
+        enversService,
+        collection,
+        collectionEntry,
+        snapshot,
+        id,
+        referencingPropertyName,
+        auditStrategyType,
+        auditFields,
+        Clock.systemUTC()
+    );
+  }
+
+  public NervPersistentCollectionChangeWorkUnit(
+      SessionImplementor sessionImplementor,
+      String entityName,
+      EnversService enversService,
+      PersistentCollection collection,
+      CollectionEntry collectionEntry,
+      Serializable snapshot,
+      Object id,
+      String referencingPropertyName,
+      AuditStrategyType auditStrategyType,
+      List<String> auditFields,
+      Clock clock
+  ) {
 
     super(sessionImplementor, entityName, enversService, collection, collectionEntry, snapshot, id,
         referencingPropertyName);
+    this.clock = Objects.requireNonNull(clock, "clock");
 
     log.debug("constructor (complex) for={}, id={}", entityName, id);
 
@@ -58,7 +91,7 @@ public class NervPersistentCollectionChangeWorkUnit extends PersistentCollection
         .mapCollectionChanges(sessionImplementor, referencingPropertyName, collection, snapshot, id);
     this.auditFields = auditFields;
     this.auditStrategyType = auditStrategyType;
-    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, null, getRevisionType());
+    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, null, getRevisionType(), clock);
   }
 
   public NervPersistentCollectionChangeWorkUnit(
@@ -70,8 +103,33 @@ public class NervPersistentCollectionChangeWorkUnit extends PersistentCollection
       String referencingPropertyName,
       AuditStrategyType auditStrategyType,
       List<String> auditFields) {
+    this(
+        sessionImplementor,
+        entityName,
+        enversService,
+        id,
+        collectionChanges,
+        referencingPropertyName,
+        auditStrategyType,
+        auditFields,
+        Clock.systemUTC()
+    );
+  }
+
+  public NervPersistentCollectionChangeWorkUnit(
+      SharedSessionContractImplementor sessionImplementor,
+      String entityName,
+      EnversService enversService,
+      Object id,
+      List<PersistentCollectionChangeData> collectionChanges,
+      String referencingPropertyName,
+      AuditStrategyType auditStrategyType,
+      List<String> auditFields,
+      Clock clock
+  ) {
 
     super(sessionImplementor, entityName, enversService, id, collectionChanges, referencingPropertyName);
+    this.clock = Objects.requireNonNull(clock, "clock");
 
     log.debug("constructor for={}, id{}", entityName, id);
 
@@ -79,7 +137,7 @@ public class NervPersistentCollectionChangeWorkUnit extends PersistentCollection
     this.referencingPropertyName = referencingPropertyName;
     this.auditStrategyType = auditStrategyType;
     this.auditFields = auditFields;
-    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, null, getRevisionType());
+    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, null, getRevisionType(), clock);
   }
 
   @Override
@@ -204,7 +262,8 @@ public class NervPersistentCollectionChangeWorkUnit extends PersistentCollection
           mergedChanges,
           referencingPropertyName,
           auditStrategyType,
-          auditFields);
+          auditFields,
+          clock);
 
     } else {
       throw new MergePersistentCollectionChangeWorkUnitException(first);

@@ -10,6 +10,7 @@ import com.czetsuyatech.nerv.audit.service.AuditServiceImpl;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.Optional;
+import java.time.Clock;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
 import com.czetsuyatech.nerv.audit.persistence.VerticalAuditSchemaValidator;
 import org.hibernate.envers.boot.internal.EnversService;
@@ -33,6 +34,12 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnClass({AuditReaderFactory.class, EntityManagerFactory.class})
 @EnableConfigurationProperties(AuditProperties.class)
 public class NervAuditAutoConfiguration {
+
+  @Bean
+  @ConditionalOnMissingBean(Clock.class)
+  public Clock nervAuditClock() {
+    return Clock.systemUTC();
+  }
 
   @Bean
   @ConditionalOnMissingBean
@@ -91,9 +98,10 @@ public class NervAuditAutoConfiguration {
   @ConditionalOnMissingBean
   public NervEnversListenerConfigurer auditNervEnversListenerConfigurer(
       EntityManagerFactory entityManagerFactory,
-      AuditConfig auditConfig
+      AuditConfig auditConfig,
+      Clock clock
   ) {
-    return new NervEnversListenerConfigurer(entityManagerFactory, auditConfig);
+    return new NervEnversListenerConfigurer(entityManagerFactory, auditConfig, clock);
   }
 
   @Bean

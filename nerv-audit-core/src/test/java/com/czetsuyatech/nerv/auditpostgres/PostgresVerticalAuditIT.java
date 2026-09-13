@@ -24,6 +24,9 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.ZoneOffset;
+import java.util.TimeZone;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -43,6 +46,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class PostgresVerticalAuditIT {
 
   private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+  private static final Clock CLOCK = Clock.fixed(Instant.parse("2030-01-01T12:34:56.123456Z"), ZoneOffset.UTC);
   private SessionFactory factory;
   private Connection connection;
   private String schema;
@@ -76,7 +80,7 @@ class PostgresVerticalAuditIT {
         .setProperty("hibernate.default_schema", schema)
         .setProperty("hibernate.hbm2ddl.auto", "none")
         .buildSessionFactory();
-    new NervEnversListenerConfigurer(factory, AuditConfig.builder().auditInsert(true).build()).afterPropertiesSet();
+    new NervEnversListenerConfigurer(factory, AuditConfig.builder().auditInsert(true).build(), CLOCK).afterPropertiesSet();
   }
 
   @AfterEach
@@ -91,7 +95,7 @@ class PostgresVerticalAuditIT {
   }
 
   @Test
-  void officialMigrationSupportsWritesHistoryFiltersAndUtcUnderNonUtcJvm() {
+  void suppliedTimestampsAndPostgresConversionRemainIndependentOfClock() {
     assertThat(java.util.TimeZone.getDefault().getID()).isEqualTo("Pacific/Honolulu");
     new VerticalAuditSchemaValidator().validate(factory);
     Instant first = Instant.parse("2026-01-15T10:20:30.123456Z");
@@ -125,6 +129,60 @@ class PostgresVerticalAuditIT {
       query.setFromDate(second);
       query.setToDate(second);
       assertThat(repository.findAuditsByQuery(query).getContent()).hasSize(1);
+    }
+  }
+
+  @Test
+  void springClockControlsEntityCollectionAndMergedWorkUnitsAcrossJvmTimezones() {
+    TimeZone original = TimeZone.getDefault();
+    try {
+      runner().withBean(Clock.class, () -> CLOCK).withPropertyValues("nerv.audit.audit-insert=true")
+          .run(context -> {
+            assertThat(context).hasNotFailed();
+            long id = 10;
+            for (String zone : List.of("UTC", "Asia/Manila", "Pacific/Honolulu")) {
+              TimeZone.setDefault(TimeZone.getTimeZone(zone));
+              final long entityId = id++;
+              factory.inTransaction(session -> {
+                Sample sample = new Sample();
+                sample.id = entityId;
+                sample.name = "initial";
+                sample.tags.add("one");
+                session.persist(sample);
+                session.flush();
+                sample.name = "insert merged with update";
+                sample.tags.add("two");
+                session.flush();
+              });
+              factory.inTransaction(session -> {
+                Sample sample = session.find(Sample.class, entityId);
+                sample.name = "first update";
+                sample.tags.remove("one");
+                session.flush();
+                sample.name = "second update";
+                sample.tags.add("three");
+                session.flush();
+              });
+              factory.inTransaction(session -> session.remove(session.find(Sample.class, entityId)));
+              var repository = context.getBean(AuditRepository.class);
+              var query = AuditQuery.builder().entities(List.of(Sample.class.getName()))
+                  .id(entityId).limit(100).build();
+              var history = repository.findAuditsByQuery(query).getContent();
+              assertThat(history).isNotEmpty().allSatisfy(row ->
+                  assertThat(row.getUpdated()).isEqualTo(CLOCK.instant()));
+              assertThat(history).extracting(row -> row.getRevisionType()).contains(0L, 1L, 2L);
+            }
+            try (var session = factory.openSession()) {
+              var collectionRepository = new AuditRepository(session, new AuditSqlBuilder(),
+                  entity -> Optional.of(schema + ".sample_tags_aud"));
+              var collectionHistory = collectionRepository.findAuditsByQuery(
+                  AuditQuery.builder().entities(List.of("tags")).limit(100).build()).getContent();
+              assertThat(collectionHistory).isNotEmpty().allSatisfy(row ->
+                  assertThat(row.getUpdated()).isEqualTo(CLOCK.instant()));
+            }
+          });
+    } finally {
+      TimeZone.setDefault(original);
     }
   }
 

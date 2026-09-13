@@ -1,6 +1,7 @@
 package com.czetsuyatech.nerv.audit.infrastructure.envers.listener;
 
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
+import java.time.Clock;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.engine.spi.CollectionEntry;
 import org.hibernate.envers.boot.internal.EnversService;
@@ -19,7 +20,16 @@ public class NervEnversPreCollectionUpdateEventListenerImpl
       EnversService enversService,
       AuditStrategyType auditStrategyType,
       String[] auditFields) {
-    super(enversService, auditStrategyType, auditFields);
+    this(enversService, auditStrategyType, auditFields, Clock.systemUTC());
+  }
+
+  public NervEnversPreCollectionUpdateEventListenerImpl(
+      EnversService enversService,
+      AuditStrategyType auditStrategyType,
+      String[] auditFields,
+      Clock clock
+  ) {
+    super(enversService, auditStrategyType, auditFields, clock);
   }
 
   @Override

@@ -4,6 +4,7 @@ import static com.czetsuyatech.nerv.audit.infrastructure.envers.AuditConstant.AU
 import static com.czetsuyatech.nerv.audit.infrastructure.envers.AuditConstant.AUDIT_UPDATED_BY;
 
 import com.czetsuyatech.nerv.audit.persistence.AuditTimestampConverter;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
@@ -32,6 +33,7 @@ public class NervAuditWorkUnit {
       VALUES 
       (:id, :revisionType, :revisionId, :fieldName, :oldValue, :newValue, :updatedBy, :updated) 
       """;
+  private final Clock clock;
   private final EnversService enversService;
   private final String entityName;
   private final String revisionTypePropName;
@@ -45,6 +47,17 @@ public class NervAuditWorkUnit {
       Map<String, Object> auditFieldsValues,
       RevisionType revisionType
   ) {
+    this(enversService, entityName, auditFieldsValues, revisionType, Clock.systemUTC());
+  }
+
+  NervAuditWorkUnit(
+      EnversService enversService,
+      String entityName,
+      Map<String, Object> auditFieldsValues,
+      RevisionType revisionType,
+      Clock clock
+  ) {
+    this.clock = Objects.requireNonNull(clock, "clock");
     this.enversService = Objects.requireNonNull(enversService, "enversService");
     this.entityName = Objects.requireNonNull(entityName, "entityName");
     this.auditFieldsValues = auditFieldsValues;
@@ -116,7 +129,7 @@ public class NervAuditWorkUnit {
       }
     }
 
-    return Instant.now();
+    return Instant.now(clock);
   }
 
   private String getVerticalTableInsert(String auditTableName) {

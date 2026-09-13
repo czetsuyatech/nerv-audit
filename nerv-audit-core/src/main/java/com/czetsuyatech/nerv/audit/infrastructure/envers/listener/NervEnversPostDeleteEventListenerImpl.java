@@ -2,9 +2,11 @@ package com.czetsuyatech.nerv.audit.infrastructure.envers.listener;
 
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.workunit.NervDelWorkUnit;
+import java.time.Clock;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.engine.spi.SessionImplementor;
@@ -21,6 +23,8 @@ import org.hibernate.persister.entity.EntityPersister;
  */
 public class NervEnversPostDeleteEventListenerImpl extends EnversPostDeleteEventListenerImpl implements FieldNormalizer {
 
+  private final Clock clock;
+
   private final AuditStrategyType auditStrategyType;
   private final Set<String> auditFields;
 
@@ -28,8 +32,18 @@ public class NervEnversPostDeleteEventListenerImpl extends EnversPostDeleteEvent
       EnversService enversService,
       AuditStrategyType auditStrategyType,
       String[] auditFields) {
+    this(enversService, auditStrategyType, auditFields, Clock.systemUTC());
+  }
+
+  public NervEnversPostDeleteEventListenerImpl(
+      EnversService enversService,
+      AuditStrategyType auditStrategyType,
+      String[] auditFields,
+      Clock clock
+  ) {
 
     super(enversService);
+    this.clock = Objects.requireNonNull(clock, "clock");
 
     this.auditStrategyType = auditStrategyType;
     this.auditFields = normalizeAuditFields(auditFields);
@@ -62,7 +76,7 @@ public class NervEnversPostDeleteEventListenerImpl extends EnversPostDeleteEvent
             event.getPersister(),
             event.getDeletedState(),
             this.auditStrategyType,
-            auditFieldValues);
+            auditFieldValues, clock);
 
     auditProcess.addWorkUnit(workUnit);
   }

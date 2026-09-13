@@ -92,6 +92,31 @@ database (PostgreSQL microseconds); no promise of nanosecond storage is made. Co
 without entity audit metadata use the current instant, as before. Revision `revtstmp` is separately
 recorded by Envers and need not equal an entity-provided `updated` instant.
 
+## Current application time
+
+NERV Audit provides an overridable `Clock` bean named `nervAuditClock`, defaulting to
+`Clock.systemUTC()`, following NERV Event's time-handling convention. Any application `Clock`
+bean replaces the default by type, so Audit and Event can share the same configured clock.
+For deterministic tests, provide:
+
+```java
+@Bean
+Clock applicationClock() {
+  return Clock.fixed(Instant.parse("2030-01-01T12:34:56Z"), ZoneOffset.UTC);
+}
+```
+
+The clock is passed explicitly through the Envers listener configurer, entity/collection
+listeners and work units, including merged work units. NERV-generated fallback `updated`
+values use `Instant.now(clock)` when no entity timestamp is supplied. The clock's zone and the
+JVM default zone do not change the resulting instant.
+
+The clock does not replace supplied entity timestamps, JDBC/PostgreSQL timestamps, or Envers'
+own revision timestamp. `AuditTimestampConverter` remains independent of Clock and retains its
+explicit UTC conversion contract. Existing infrastructure constructors remain available for
+manual integrations with a UTC system-clock default; use their Clock-taking overloads when
+constructing these components outside Spring. No Clock-specific API was added to `nerv-audit-api`.
+
 ## Startup validation
 
 Explicit auto-configuration runs a dedicated, read-only `VerticalAuditSchemaValidator` after

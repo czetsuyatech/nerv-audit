@@ -1,8 +1,10 @@
 package com.czetsuyatech.nerv.audit.infrastructure.envers.workunit;
 
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
+import java.time.Clock;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Session;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
@@ -23,6 +25,8 @@ import org.springframework.util.StringUtils;
  */
 public class NervAddWorkUnit extends AddWorkUnit implements NervAuditPerformer {
 
+  private final Clock clock;
+
   private final Object[] state;
   private final Map<String, Object> data;
   private final AuditStrategyType auditStrategyType;
@@ -40,7 +44,32 @@ public class NervAddWorkUnit extends AddWorkUnit implements NervAuditPerformer {
       AuditStrategyType auditStrategyType,
       Map<String, Object> auditFieldsValues
   ) {
+    this(
+        sessionImplementor,
+        entityName,
+        enversService,
+        id,
+        entityPersister,
+        state,
+        auditStrategyType,
+        auditFieldsValues,
+        Clock.systemUTC()
+    );
+  }
+
+  public NervAddWorkUnit(
+      SharedSessionContractImplementor sessionImplementor,
+      String entityName,
+      EnversService enversService,
+      Object id,
+      EntityPersister entityPersister,
+      Object[] state,
+      AuditStrategyType auditStrategyType,
+      Map<String, Object> auditFieldsValues,
+      Clock clock
+  ) {
     super(sessionImplementor, entityName, enversService, id, entityPersister, state);
+    this.clock = Objects.requireNonNull(clock, "clock");
 
     log.debug("constructor (complex) for={}, id={}", entityName, id);
 
@@ -53,7 +82,7 @@ public class NervAddWorkUnit extends AddWorkUnit implements NervAuditPerformer {
         .get(getEntityName())
         .getPropertyMapper()
         .map(sessionImplementor, data, entityPersister.getPropertyNames(), state, null);
-    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, auditFieldsValues, getRevisionType());
+    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, auditFieldsValues, getRevisionType(), clock);
   }
 
   public NervAddWorkUnit(
@@ -65,7 +94,30 @@ public class NervAddWorkUnit extends AddWorkUnit implements NervAuditPerformer {
       AuditStrategyType auditStrategyType,
       Map<String, Object> auditFieldsValues
   ) {
+    this(
+        sessionImplementor,
+        entityName,
+        enversService,
+        id,
+        data,
+        auditStrategyType,
+        auditFieldsValues,
+        Clock.systemUTC()
+    );
+  }
+
+  public NervAddWorkUnit(
+      SharedSessionContractImplementor sessionImplementor,
+      String entityName,
+      EnversService enversService,
+      Object id,
+      Map<String, Object> data,
+      AuditStrategyType auditStrategyType,
+      Map<String, Object> auditFieldsValues,
+      Clock clock
+  ) {
     super(sessionImplementor, entityName, enversService, id, data);
+    this.clock = Objects.requireNonNull(clock, "clock");
 
     log.debug("constructor for={}, id={}", entityName, id);
 
@@ -80,7 +132,7 @@ public class NervAddWorkUnit extends AddWorkUnit implements NervAuditPerformer {
         .getPropertyNames();
     this.state = ArraysTools.mapToArray(data, propertyNames);
 
-    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, auditFieldsValues, getRevisionType());
+    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, auditFieldsValues, getRevisionType(), clock);
   }
 
   @Override
@@ -182,8 +234,8 @@ public class NervAddWorkUnit extends AddWorkUnit implements NervAuditPerformer {
         id,
         mergeModifiedFlagsCustom(data, second.getData(), second.getDirtyProperties()),
         auditStrategyType,
-        auditFieldsValues
-    );
+        auditFieldsValues,
+        clock);
   }
 
   private AuditWorkUnit mergeCustom(NervAddWorkUnit second) {

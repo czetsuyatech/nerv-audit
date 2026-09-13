@@ -11,6 +11,12 @@ import com.czetsuyatech.nerv.audit.persistence.VerticalAuditSchemaValidator;
 import com.czetsuyatech.nerv.audit.persistence.AuditTableResolver;
 import com.czetsuyatech.nerv.audit.persistence.repository.AuditRepository;
 import com.czetsuyatech.nerv.audit.service.AuditService;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.TimeZone;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -83,6 +89,40 @@ class NervAuditAutoConfigurationTest {
           assertThat(context).hasNotFailed();
           org.mockito.Mockito.verifyNoInteractions(validator);
         });
+  }
+
+  @Test
+  void defaultClockUsesUtcRegardlessOfJvmTimezone() {
+    TimeZone original = TimeZone.getDefault();
+    try {
+      for (String zone : new String[] {"Asia/Manila", "Pacific/Honolulu"}) {
+        TimeZone.setDefault(TimeZone.getTimeZone(zone));
+        contextRunner.run(context -> {
+          assertThat(context).hasSingleBean(Clock.class).hasBean("nervAuditClock");
+          assertThat(context.getBean(Clock.class).getZone()).isEqualTo(ZoneOffset.UTC);
+        });
+      }
+    } finally {
+      TimeZone.setDefault(original);
+    }
+  }
+
+  @Test
+  void applicationClockOverridesTheDefaultClock() {
+    contextRunner.withUserConfiguration(ClockConfiguration.class).run(context -> {
+      assertThat(context).hasSingleBean(Clock.class).doesNotHaveBean("nervAuditClock");
+      assertThat(context.getBean(Clock.class)).isSameAs(ClockConfiguration.CLOCK);
+    });
+  }
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class ClockConfiguration {
+    static final Clock CLOCK = Clock.fixed(Instant.parse("2030-01-01T00:00:00Z"), ZoneOffset.UTC);
+
+    @Bean
+    Clock clock() {
+      return CLOCK;
+    }
   }
 
   private static EntityManagerFactory entityManagerFactory() {

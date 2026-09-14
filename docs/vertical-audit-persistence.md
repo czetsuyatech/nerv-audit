@@ -27,6 +27,11 @@ Core packages tool-neutral resources under `db/nerv-audit/postgresql/`, outside 
   input. A `.template` is deliberately not auto-discovered as a Flyway migration.
 - `V002__nerv_audit_vertical_utc_upgrade.sql.template`: explicit conversion of existing
   UTC-valued `timestamp without time zone` columns; see the upgrade procedure below.
+- `V003__nerv_audit_vertical_contract_upgrade.sql.template`: adopt required nullability and a
+  validated, single-column revision FK on an existing table, then add the V001 performance
+  indexes only where a compatible btree prefix is absent. Existing keys, rows and sequence
+  values are preserved; valid existing FKs are reused. An unvalidated FK is explicitly validated.
+  This is an operator-applied migration, never invoked by the validator.
 
 There is no fixed list of application audit tables: NERV Audit does not own consumer entities.
 For `@Table(name="payment")` the default is `payment_aud`; an audited collection table needs
@@ -68,7 +73,10 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f /tmp/payment_aud.sql
 
 Set the same schema/search path as Hibernate before running these commands. Copy rendered SQL
 into your application's versioned Flyway/Liquibase migrations if desired; neither tool is a
-mandatory runtime dependency. Apply revision DDL once, then table DDL once per table. For custom
+mandatory runtime dependency. Assign unique consumer migration versions/changeset IDs to the
+revision baseline and each rendered table. Flyway understands the dollar-quoted PostgreSQL
+blocks in the upgrade scripts. With Liquibase `sqlFile`, use `splitStatements="false"` for these
+scripts so the `DO` block is passed intact (run the changeset transactionally). Apply revision DDL once, then table DDL once per table. For custom
 revision entities/generators, use their actual mapping for revision table/sequence DDL. Vertical
 writes retain the existing `DefaultRevisionEntity` contract, and vertical queries require the
 revision column names `rev` and `revtype`. Revision timestamps use epoch milliseconds (`bigint`),
@@ -130,8 +138,10 @@ nerv.audit.vertical.schema-validation.enabled=false
 
 It is **enabled by default** for production safety. It checks the mapped entity and collection
 audit tables, additional query-resolver targets, required columns, compatible JDBC types,
-PostgreSQL `timestamptz` and required nullability, the revision primary key, PostgreSQL revision foreign keys and the
-actual mapped revision sequence/increment where sequence generation is used. It does not modify
+PostgreSQL `timestamptz` and required nullability, the revision primary key, PostgreSQL revision
+foreign keys and the actual mapped revision sequence/increment where sequence generation is used.
+Revision FKs must be validated and contain exactly the `rev` relationship: a `NOT VALID` constraint
+or a matching row inside a composite FK does not guarantee that each audit revision exists. It does not modify
 anything. Missing schema or incompatible types throw `VerticalAuditSchemaValidationException`
 with an immutable `getProblems()` list and actionable NERV Audit diagnostics. It intentionally
 does not require optional performance indexes or the template's storage-only identity column.
@@ -157,20 +167,25 @@ Back up, rehearse on a copy, and schedule the table lock/rewrite before applicat
 Existing PostgreSQL tables also need `NOT NULL` on `id`, `rev`, `revtype` and `updated`, plus
 valid `rev` foreign keys to the mapped revision table. Inspect/fix
 orphan revisions and missing required values before adding constraints; do not drop history automatically.
-For a legacy `payment_aud` table lacking those constraints, after repairing any invalid rows:
+Render and apply V003 once per legacy table, after V002 if needed. It refuses a zone-free `updated`
+column instead of guessing its historical timezone. It sets required nullability, adds a missing
+revision FK or validates an existing unvalidated FK, and adds only absent compatible performance
+indexes. The single PostgreSQL `DO` statement is atomic: invalid null/orphan rows cause failure
+without deleting history or leaving a partially applied upgrade. Existing suitable entity-only
+primary keys remain intact. For collection tables, remove any incompatible tuple uniqueness only
+in a separately reviewed application migration; do not discard duplicate history.
 
-```sql
-ALTER TABLE payment_aud
-    ALTER COLUMN id SET NOT NULL,
-    ALTER COLUMN rev SET NOT NULL,
-    ALTER COLUMN revtype SET NOT NULL,
-    ALTER COLUMN updated SET NOT NULL;
-ALTER TABLE payment_aud ADD CONSTRAINT payment_aud_rev_fk
-    FOREIGN KEY (rev) REFERENCES revinfo (rev);
+```sh
+sed 's/${auditTable}/payment_aud/g' \
+  nerv-audit-core/src/main/resources/db/nerv-audit/postgresql/V003__nerv_audit_vertical_contract_upgrade.sql.template \
+  > /tmp/payment_aud_upgrade.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f /tmp/payment_aud_upgrade.sql
 ```
 
-Do not add a duplicate FK where one already exists. Existing sequence
-names, increments and values must agree with the actual Hibernate mapping. Do not recreate or
+V003 assumes the existing default `revinfo(rev)` mapping. Custom revision tables need a reviewed
+adaptation to that mapping. Templates accept trusted SQL identifiers; unusual names containing
+SQL string delimiters also require correct string-literal escaping in their `regclass` declarations.
+Revision sequence names, increments and values must agree with the actual Hibernate mapping. Do not recreate or
 reset existing revision sequences. Do not apply fresh-install V001 over existing tables.
 
 Versioned SQL filenames define the schema contract; no NERV version table or migration engine
@@ -178,7 +193,9 @@ is introduced. Structural validation checks compatibility even for manually mana
 Future incompatible versions must ship explicit upgrade SQL and matching validator/tests. Track
 applied versions in your deployment migrations, preserve checksums, and apply upgrades before
 starting the corresponding library. To retire the showcase's old V11 workaround, its forward
-V12 migration restores `timestamptz`; immutable V11 remains solely for migration history.
+V12 migration restores `timestamptz`; immutable V11 remains solely for migration history. The showcase's
+V13 is exactly the rendered official V003 migration, with a consumer-side contract test preventing
+independent edits. Its business tables remain application-owned.
 
 ## Verification
 
@@ -190,6 +207,12 @@ mvn clean verify -Ppostgresql
 The explicit PostgreSQL profile requires Docker and fails if it is unavailable (no silent skip).
 Its isolated Failsafe JVM runs in `Pacific/Honolulu`. It applies packaged migration templates,
 creates and revises an audited entity/collection, checks history and date filters as instants,
-and exercises valid/invalid schema, startup opt-out, HORIZONTAL opt-out and legacy UTC upgrades.
+and exercises valid/invalid schema, startup opt-out, HORIZONTAL/no-audited-entity opt-out, legacy UTC
+and constraint upgrades, orphan preservation, read-only validation, and revision FK validity.
+The published migration files are immutable: introduce a higher version for future changes.
+Copy or render their contents into uniquely numbered consumer migrations rather than pointing
+Flyway at the whole resource directory (the two V001 resources have different application scopes).
 
 The implementation and measured results are recorded in the [verification report](vertical-audit-verification.md).
+
+Schema-specific verification and compatibility details are in the [schema report](vertical-schema-verification.md).

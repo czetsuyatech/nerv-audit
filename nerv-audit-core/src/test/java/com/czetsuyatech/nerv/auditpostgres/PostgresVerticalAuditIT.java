@@ -6,6 +6,7 @@ import com.czetsuyatech.nerv.audit.persistence.VerticalAuditSchemaValidationExce
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.czetsuyatech.nerv.audit.application.query.AuditQuery;
 import com.czetsuyatech.nerv.audit.autoconfigure.NervAuditAutoConfiguration;
@@ -73,13 +74,7 @@ class PostgresVerticalAuditIT {
     }
     sql("create table sample (id bigint primary key, name varchar(255), updated timestamptz)");
     sql("create table sample_tags (Sample_id bigint not null, tags varchar(255))");
-    factory = new Configuration().addAnnotatedClass(Sample.class)
-        .setProperty("hibernate.connection.url", POSTGRES.getJdbcUrl())
-        .setProperty("hibernate.connection.username", POSTGRES.getUsername())
-        .setProperty("hibernate.connection.password", POSTGRES.getPassword())
-        .setProperty("hibernate.default_schema", schema)
-        .setProperty("hibernate.hbm2ddl.auto", "none")
-        .buildSessionFactory();
+    factory = postgresConfiguration().addAnnotatedClass(Sample.class).buildSessionFactory();
     new NervEnversListenerConfigurer(factory, AuditConfig.builder().auditInsert(true).build(), CLOCK).afterPropertiesSet();
   }
 
@@ -124,6 +119,9 @@ class PostgresVerticalAuditIT {
       query.setFieldName("NAME");
       var history = repository.findAuditsByQuery(query);
       assertThat(history.getTotal()).isEqualTo(2);
+      assertThat(history.getContent()).extracting(row -> row.getFieldName(), row -> row.getOldValue(),
+          row -> row.getNewValue(), row -> row.getUpdatedBy())
+          .containsExactly(tuple("NAME", "before", "after", "SYSTEM"), tuple("NAME", null, "before", "SYSTEM"));
       assertThat(history.getContent()).extracting(row -> row.getUpdated()).containsExactly(second, first);
       assertThat(history.getContent()).extracting(row -> row.getRevisionNo()).doesNotHaveDuplicates();
       query.setFromDate(second);
@@ -274,6 +272,133 @@ class PostgresVerticalAuditIT {
     sql("alter table \"Other_AUD\" rename column updated to \"UPDATED\"");
     assertThatThrownBy(() -> new VerticalAuditSchemaValidator().validate(factory, resolver))
         .hasMessageContaining("Missing column: " + schema + ".Other_AUD.updated");
+  }
+
+  @Test
+  void legacyMigrationPreservesHistoryAndIsSafeToAdoptOnCompatibleSchemas() throws Exception {
+    sql("drop table sample_aud");
+    sql("create table sample_aud (id bigint, rev bigint, revtype bigint, field_name varchar(255), "
+        + "old_value varchar(255), new_value varchar(255), updated_by varchar(255), updated timestamp)");
+    sql("insert into revinfo values (99, 0)");
+    sql("insert into sample_aud values (7, 99, 1, 'NAME', 'before', 'after', 'actor', '2026-01-15 10:20:30.123456')");
+    sql(resource("V002__nerv_audit_vertical_utc_upgrade.sql.template").replace("${auditTable}", "sample_aud"));
+    String upgrade = resource("V003__nerv_audit_vertical_contract_upgrade.sql.template")
+        .replace("${auditTable}", "sample_aud");
+    sql(upgrade);
+    new VerticalAuditSchemaValidator().validate(factory);
+    // Re-adopting the contract must not duplicate indexes or revision relationships.
+    String before = schemaSnapshot();
+    sql(upgrade);
+    assertThat(schemaSnapshot()).isEqualTo(before);
+    try (var session = factory.openSession()) {
+      var repository = new AuditRepository(session, new AuditSqlBuilder(), entity -> Optional.of(schema + ".sample_aud"));
+      var history = repository.findAuditsByQuery(AuditQuery.builder().entities(List.of("sample")).id(7L).build());
+      assertThat(history.getContent()).singleElement().satisfies(row -> {
+        assertThat(row.getRevisionNo()).isEqualTo(99L);
+        assertThat(row.getOldValue()).isEqualTo("before");
+        assertThat(row.getNewValue()).isEqualTo("after");
+        assertThat(row.getUpdated()).isEqualTo(Instant.parse("2026-01-15T10:20:30.123456Z"));
+      });
+    }
+  }
+
+  @Test
+  void unvalidatedRevisionForeignKeyIsRejectedAndExplicitUpgradeValidatesIt() throws Exception {
+    sql("alter table sample_aud drop constraint sample_aud_rev_fkey");
+    sql("alter table sample_aud add foreign key (rev) references revinfo (rev) not valid");
+    assertProblem("requires a validated single-column relationship");
+    sql(resource("V003__nerv_audit_vertical_contract_upgrade.sql.template").replace("${auditTable}", "sample_aud"));
+    new VerticalAuditSchemaValidator().validate(factory);
+  }
+
+  @Test
+  void compositeForeignKeyDoesNotSubstituteForTheRevisionRelationship() throws Exception {
+    sql("alter table sample_aud drop constraint sample_aud_rev_fkey");
+    sql("alter table revinfo add constraint revinfo_pair unique (rev, revtstmp)");
+    sql("alter table sample_aud add column other_revision_value bigint");
+    sql("alter table sample_aud add foreign key (rev, other_revision_value) references revinfo (rev, revtstmp)");
+    assertProblem("requires a validated single-column relationship");
+  }
+
+  @Test
+  void upgradeFailsAtomicallyOnOrphanHistoryWithoutDiscardingRows() throws Exception {
+    sql("alter table sample_aud drop constraint sample_aud_rev_fkey");
+    sql("insert into sample_aud (id, rev, revtype, updated) values (7, 999, 1, '2026-01-01Z')");
+    String before = schemaSnapshot();
+    assertThatThrownBy(() -> sql(resource("V003__nerv_audit_vertical_contract_upgrade.sql.template")
+        .replace("${auditTable}", "sample_aud"))).isInstanceOf(java.sql.SQLException.class)
+        .hasMessageContaining("foreign key");
+    assertThat(schemaSnapshot()).isEqualTo(before);
+    try (var statement = connection.createStatement(); var rs = statement.executeQuery("select rev from sample_aud")) {
+      assertThat(rs.next()).isTrue();
+      assertThat(rs.getLong(1)).isEqualTo(999L);
+    }
+  }
+
+  @Test
+  void validatorWorksWithReadOnlyPostgresTransactionsAndDoesNotChangeSchema() throws Exception {
+    String before = schemaSnapshot();
+    String url = POSTGRES.getJdbcUrl();
+    try (var readOnlyFactory = postgresConfiguration().addAnnotatedClass(Sample.class)
+        .setProperty("hibernate.connection.url", url + (url.contains("?") ? "&" : "?")
+            + "options=-c%20default_transaction_read_only%3Don")
+        .buildSessionFactory()) {
+      try (var session = readOnlyFactory.openSession()) {
+        session.doWork(c -> {
+          try (var statement = c.createStatement(); var rs = statement.executeQuery("show transaction_read_only")) {
+            assertThat(rs.next()).isTrue();
+            assertThat(rs.getString(1)).isEqualTo("on");
+          }
+        });
+      }
+      new VerticalAuditSchemaValidator().validate(readOnlyFactory);
+      sql("alter table sample_aud drop column updated_by");
+      assertThatThrownBy(() -> new VerticalAuditSchemaValidator().validate(readOnlyFactory))
+          .hasMessageContaining("Missing column: " + schema + ".sample_aud.updated_by");
+      sql("alter table sample_aud add column updated_by varchar(255)");
+    }
+    assertThat(schemaSnapshot()).isEqualTo(before);
+  }
+
+  @Test
+  void applicationWithoutAuditedEntitiesDoesNotRequireAuditSchema() throws Exception {
+    sql("drop table sample_aud, sample_tags_aud, revinfo");
+    sql("drop sequence revinfo_seq");
+    try (var noAuditFactory = postgresConfiguration().buildSessionFactory()) {
+      new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(NervAuditAutoConfiguration.class))
+          .withBean(EntityManagerFactory.class, () -> noAuditFactory, definition -> definition.setDestroyMethodName(""))
+          .withBean(EntityManager.class, noAuditFactory::createEntityManager)
+          .run(context -> assertThat(context).hasNotFailed());
+    }
+  }
+
+  private Configuration postgresConfiguration() {
+    return new Configuration()
+        .setProperty("hibernate.connection.url", POSTGRES.getJdbcUrl())
+        .setProperty("hibernate.connection.username", POSTGRES.getUsername())
+        .setProperty("hibernate.connection.password", POSTGRES.getPassword())
+        .setProperty("hibernate.default_schema", schema)
+        .setProperty("hibernate.hbm2ddl.auto", "none");
+  }
+
+  private String schemaSnapshot() throws Exception {
+    StringBuilder snapshot = new StringBuilder();
+    for (String query : List.of(
+        "select tablename, indexname, indexdef from pg_indexes where schemaname = '" + schema + "' order by 1, 2",
+        "select conname, pg_get_constraintdef(oid), convalidated from pg_constraint where connamespace = '"
+            + schema + "'::regnamespace order by 1",
+        "select sequence_name, increment from information_schema.sequences where sequence_schema = '"
+            + schema + "' order by 1")) {
+      try (var statement = connection.createStatement(); var rs = statement.executeQuery(query)) {
+        while (rs.next()) {
+          for (int column = 1; column <= rs.getMetaData().getColumnCount(); column++) {
+            snapshot.append(rs.getString(column)).append('|');
+          }
+          snapshot.append('\n');
+        }
+      }
+    }
+    return snapshot.toString();
   }
 
   private ApplicationContextRunner runner() {

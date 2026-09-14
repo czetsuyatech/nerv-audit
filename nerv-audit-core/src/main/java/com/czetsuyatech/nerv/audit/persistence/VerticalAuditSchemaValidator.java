@@ -146,23 +146,34 @@ public class VerticalAuditSchemaValidator {
           problems.add("Column " + table + "." + required + " must be NOT NULL");
         }
       }
-      boolean revisionForeignKey = false;
-      try (var rs = metadata.getImportedKeys(table.catalog(), table.schema(), table.name())) {
-        while (rs.next()) {
-          if (fold(metadata, "rev").equals(rs.getString("FKCOLUMN_NAME"))
-              && revision.name().equals(rs.getString("PKTABLE_NAME"))
-              && revision.schema().equals(rs.getString("PKTABLE_SCHEM"))
-              && revisionId.equals(rs.getString("PKCOLUMN_NAME"))) {
-            revisionForeignKey = true;
-          }
-        }
-      }
-      if (!revisionForeignKey) {
-        problems.add("Missing foreign key: " + table + ".rev -> " + revision + "." + revisionId);
+      if (!hasRevisionForeignKey(connection, table, revision, revisionId)) {
+        problems.add("Missing foreign key: " + table + ".rev -> " + revision + "." + revisionId
+            + " (requires a validated single-column relationship)");
       }
     }
     // No (id, rev, field_name) uniqueness: collection rows use id=0 and can repeat within a revision.
     // Secondary indexes affect performance only and are deliberately not startup requirements.
+  }
+
+  private static boolean hasRevisionForeignKey(Connection connection, Table table, Table revision, String revisionId)
+      throws SQLException {
+    // JDBC imported-key rows alone cannot distinguish a partial composite match or NOT VALID FK.
+    String sql = """
+        SELECT 1 FROM pg_catalog.pg_constraint fk
+        JOIN pg_catalog.pg_attribute source ON source.attrelid = fk.conrelid AND source.attname = 'rev'
+        JOIN pg_catalog.pg_attribute target ON target.attrelid = fk.confrelid AND target.attname = ?
+        WHERE fk.contype = 'f' AND fk.convalidated
+          AND fk.conrelid = to_regclass(?) AND fk.confrelid = to_regclass(?)
+          AND fk.conkey = ARRAY[source.attnum] AND fk.confkey = ARRAY[target.attnum]
+        """;
+    try (var statement = connection.prepareStatement(sql)) {
+      statement.setString(1, revisionId);
+      statement.setString(2, quote(table.schema()) + "." + quote(table.name()));
+      statement.setString(3, quote(revision.schema()) + "." + quote(revision.name()));
+      try (var rs = statement.executeQuery()) {
+        return rs.next();
+      }
+    }
   }
 
   private static Map<String, Column> columns(DatabaseMetaData metadata, Table table, List<String> problems)

@@ -1,0 +1,73 @@
+-- Existing vertical tables only; render ${auditTable} as a trusted SQL identifier.
+-- Run in the revision table schema, after V002 if updated was a UTC zone-free timestamp.
+-- This explicit migration preserves rows, existing keys, identities and revision sequences.
+-- Invalid/null/orphan history causes failure: repair it explicitly, never discard it automatically.
+DO $$
+DECLARE
+    audit_table regclass := '${auditTable}'::regclass;
+    revision_table regclass := 'revinfo'::regclass;
+    id_column smallint;
+    rev_column smallint;
+    updated_column smallint;
+    revision_id_column smallint;
+    revision_fk record;
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = audit_table AND attname = 'updated'
+          AND atttypid = 'timestamp with time zone'::regtype AND NOT attisdropped
+    ) THEN
+        RAISE EXCEPTION 'NERV Audit contract upgrade requires timestamptz updated; apply the reviewed UTC upgrade first';
+    END IF;
+
+    EXECUTE format('ALTER TABLE %s ALTER COLUMN id SET NOT NULL, ALTER COLUMN rev SET NOT NULL, '
+        'ALTER COLUMN revtype SET NOT NULL, ALTER COLUMN updated SET NOT NULL', audit_table);
+
+    SELECT attnum INTO STRICT id_column FROM pg_attribute
+        WHERE attrelid = audit_table AND attname = 'id' AND NOT attisdropped;
+    SELECT attnum INTO STRICT rev_column FROM pg_attribute
+        WHERE attrelid = audit_table AND attname = 'rev' AND NOT attisdropped;
+    SELECT attnum INTO STRICT updated_column FROM pg_attribute
+        WHERE attrelid = audit_table AND attname = 'updated' AND NOT attisdropped;
+    SELECT attnum INTO STRICT revision_id_column FROM pg_attribute
+        WHERE attrelid = revision_table AND attname = 'rev' AND NOT attisdropped;
+
+    SELECT conname, convalidated INTO revision_fk FROM pg_constraint
+        WHERE conrelid = audit_table AND confrelid = revision_table AND contype = 'f'
+          AND conkey = ARRAY[rev_column] AND confkey = ARRAY[revision_id_column]
+        ORDER BY convalidated DESC LIMIT 1;
+    IF NOT FOUND THEN
+        EXECUTE format('ALTER TABLE %s ADD FOREIGN KEY (rev) REFERENCES %s (rev)', audit_table, revision_table);
+    ELSIF NOT revision_fk.convalidated THEN
+        EXECUTE format('ALTER TABLE %s VALIDATE CONSTRAINT %I', audit_table, revision_fk.conname);
+    END IF;
+
+    -- Optional performance indexes from V001; reuse existing compatible btree prefixes.
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+        JOIN pg_am am ON am.oid = c.relam
+        WHERE i.indrelid = audit_table AND i.indisvalid AND i.indisready
+          AND i.indpred IS NULL AND i.indexprs IS NULL AND am.amname = 'btree'
+          AND i.indnkeyatts >= 2 AND i.indkey[0] = id_column AND i.indkey[1] = rev_column
+    ) THEN
+        EXECUTE format('CREATE INDEX ON %s (id, rev)', audit_table);
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+        JOIN pg_am am ON am.oid = c.relam
+        WHERE i.indrelid = audit_table AND i.indisvalid AND i.indisready
+          AND i.indpred IS NULL AND i.indexprs IS NULL AND am.amname = 'btree'
+          AND i.indnkeyatts >= 1 AND i.indkey[0] = rev_column
+    ) THEN
+        EXECUTE format('CREATE INDEX ON %s (rev)', audit_table);
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+        JOIN pg_am am ON am.oid = c.relam
+        WHERE i.indrelid = audit_table AND i.indisvalid AND i.indisready
+          AND i.indpred IS NULL AND i.indexprs IS NULL AND am.amname = 'btree'
+          AND i.indnkeyatts >= 1 AND i.indkey[0] = updated_column
+    ) THEN
+        EXECUTE format('CREATE INDEX ON %s (updated)', audit_table);
+    END IF;
+END $$;

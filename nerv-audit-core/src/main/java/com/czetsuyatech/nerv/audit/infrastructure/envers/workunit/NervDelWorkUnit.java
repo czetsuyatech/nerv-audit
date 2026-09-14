@@ -1,6 +1,7 @@
 package com.czetsuyatech.nerv.audit.infrastructure.envers.workunit;
 
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
+import java.time.Clock;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -24,6 +25,8 @@ public class NervDelWorkUnit extends DelWorkUnit implements AuditWorkUnit, NervA
 
   private static final String DELETED_SENTINEL = " ";
 
+  private final Clock clock;
+
   private final Object[] state;
   private final EntityPersister entityPersister;
   private final String[] propertyNames;
@@ -41,8 +44,33 @@ public class NervDelWorkUnit extends DelWorkUnit implements AuditWorkUnit, NervA
       Object[] state,
       AuditStrategyType auditStrategyType,
       Map<String, Object> auditFieldsValues) {
+    this(
+        sessionImplementor,
+        entityName,
+        enversService,
+        id,
+        entityPersister,
+        state,
+        auditStrategyType,
+        auditFieldsValues,
+        Clock.systemUTC()
+    );
+  }
+
+  public NervDelWorkUnit(
+      SessionImplementor sessionImplementor,
+      String entityName,
+      EnversService enversService,
+      Object id,
+      EntityPersister entityPersister,
+      Object[] state,
+      AuditStrategyType auditStrategyType,
+      Map<String, Object> auditFieldsValues,
+      Clock clock
+  ) {
 
     super(sessionImplementor, entityName, enversService, id, entityPersister, state);
+    this.clock = Objects.requireNonNull(clock, "clock");
 
     log.debug("constructor for={}, id={}", entityName, id);
 
@@ -52,7 +80,7 @@ public class NervDelWorkUnit extends DelWorkUnit implements AuditWorkUnit, NervA
     this.entityPersister = entityPersister;
     this.propertyNames = entityPersister.getPropertyNames();
     this.auditWorkUnit =
-        new NervAuditWorkUnit(enversService, entityName, auditFieldsValues, getRevisionType());
+        new NervAuditWorkUnit(enversService, entityName, auditFieldsValues, getRevisionType(), clock);
   }
 
   @Override
@@ -144,7 +172,8 @@ public class NervDelWorkUnit extends DelWorkUnit implements AuditWorkUnit, NervA
         state,
         dirtyProp,
         auditStrategyType,
-        auditFieldsValues);
+        auditFieldsValues,
+        clock);
   }
 
   private static long toLongId(Object id) {

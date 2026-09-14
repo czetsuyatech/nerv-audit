@@ -2,9 +2,11 @@ package com.czetsuyatech.nerv.audit.infrastructure.envers.listener;
 
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.workunit.NervAddWorkUnit;
+import java.time.Clock;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.envers.boot.internal.EnversService;
@@ -20,6 +22,8 @@ import org.hibernate.persister.entity.EntityPersister;
 public class NervEnversPostInsertEventListenerImpl extends EnversPostInsertEventListenerImpl implements
     FieldNormalizer {
 
+  private final Clock clock;
+
   private final AuditStrategyType auditStrategyType;
   private final boolean auditInsert;
   private final Set<String> auditFields;
@@ -29,8 +33,19 @@ public class NervEnversPostInsertEventListenerImpl extends EnversPostInsertEvent
       AuditStrategyType auditStrategyType,
       String[] auditFields,
       boolean auditInsert) {
+    this(enversService, auditStrategyType, auditFields, auditInsert, Clock.systemUTC());
+  }
+
+  public NervEnversPostInsertEventListenerImpl(
+      EnversService enversService,
+      AuditStrategyType auditStrategyType,
+      String[] auditFields,
+      boolean auditInsert,
+      Clock clock
+  ) {
 
     super(enversService);
+    this.clock = Objects.requireNonNull(clock, "clock");
 
     this.auditStrategyType = auditStrategyType;
     this.auditInsert = auditInsert;
@@ -66,7 +81,7 @@ public class NervEnversPostInsertEventListenerImpl extends EnversPostInsertEvent
         persister,
         event.getState(),
         auditStrategyType,
-        auditFieldValues);
+        auditFieldValues, clock);
 
     auditProcess.addWorkUnit(workUnit);
   }

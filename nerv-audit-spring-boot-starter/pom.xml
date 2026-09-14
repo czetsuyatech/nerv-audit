@@ -6,13 +6,61 @@
   <parent>
     <groupId>com.czetsuyatech.nerv</groupId>
     <artifactId>nerv-audit</artifactId>
-    <version>2.0.1</version>
+    <version>2.1.0</version>
   </parent>
 
   <groupId>com.czetsuyatech.nerv</groupId>
   <artifactId>nerv-audit-spring-boot-starter</artifactId>
   <name>NERV | Audit Spring Boot Starter</name>
   <description>Spring Boot starter that assembles NERV Audit, its operations API, and optional web operations.</description>
+
+  <build>
+    <plugins>
+      <!-- This dependency-only starter has no main sources to archive or document. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <configuration>
+          <skipSource>true</skipSource>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>attach-placeholder-sources</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>sources</classifier>
+              <classesDirectory>${project.basedir}/src/release</classesDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>attach-placeholder-javadocs</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>javadoc</classifier>
+              <classesDirectory>${project.basedir}/src/release</classesDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 
   <dependencies>
     <dependency>

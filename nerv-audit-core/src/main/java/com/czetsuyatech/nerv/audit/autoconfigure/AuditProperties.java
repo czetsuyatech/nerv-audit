@@ -14,4 +14,15 @@ public class AuditProperties {
   private AuditStrategyType auditStrategyType;
   private Boolean auditInsert;
   private String auditFields;
+  private Vertical vertical = new Vertical();
+
+  @Data
+  public static class Vertical {
+    private SchemaValidation schemaValidation = new SchemaValidation();
+  }
+
+  @Data
+  public static class SchemaValidation {
+    private boolean enabled = true;
+  }
 }

@@ -2,9 +2,11 @@ package com.czetsuyatech.nerv.audit.infrastructure.envers.workunit;
 
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.util.NervAuditUtil;
+import java.time.Clock;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,8 @@ import org.hibernate.type.EntityType;
  */
 public class NervModWorkUnit extends org.hibernate.envers.internal.synchronization.work.ModWorkUnit implements
     NervAuditPerformer {
+
+  private final Clock clock;
 
   private final Map<String, Object> data;
   private final boolean changes;
@@ -49,8 +53,37 @@ public class NervModWorkUnit extends org.hibernate.envers.internal.synchronizati
       Map<Integer, String> dirtyProperties,
       AuditStrategyType auditStrategyType,
       Map<String, Object> auditFieldsValues) {
+    this(
+        sessionImplementor,
+        entityName,
+        enversService,
+        id,
+        entityPersister,
+        newState,
+        oldState,
+        dirtyProperties,
+        auditStrategyType,
+        auditFieldsValues,
+        Clock.systemUTC()
+    );
+  }
+
+  public NervModWorkUnit(
+      SharedSessionContractImplementor sessionImplementor,
+      String entityName,
+      EnversService enversService,
+      Object id,
+      EntityPersister entityPersister,
+      Object[] newState,
+      Object[] oldState,
+      Map<Integer, String> dirtyProperties,
+      AuditStrategyType auditStrategyType,
+      Map<String, Object> auditFieldsValues,
+      Clock clock
+  ) {
 
     super(sessionImplementor, entityName, enversService, id, entityPersister, newState, oldState);
+    this.clock = Objects.requireNonNull(clock, "clock");
 
     log.debug("constructor for={}, id={}", entityName, id);
 
@@ -68,7 +101,7 @@ public class NervModWorkUnit extends org.hibernate.envers.internal.synchronizati
         .get(getEntityName())
         .getPropertyMapper()
         .map(sessionImplementor, data, entityPersister.getPropertyNames(), newState, oldState);
-    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, this.auditFieldsValues, getRevisionType());
+    this.auditWorkUnit = new NervAuditWorkUnit(enversService, entityName, this.auditFieldsValues, getRevisionType(), clock);
   }
 
   @Override
@@ -198,7 +231,8 @@ public class NervModWorkUnit extends org.hibernate.envers.internal.synchronizati
         this.oldState,
         mergedDirty,
         auditStrategyType,
-        auditFieldsValues);
+        auditFieldsValues,
+        clock);
   }
 
   public Map<Integer, String> getDirtyProperties() {

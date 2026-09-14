@@ -30,11 +30,14 @@ manual assembly, license, activation, additional repository, or credentials.
 <dependency>
   <groupId>com.czetsuyatech.nerv</groupId>
   <artifactId>nerv-audit-spring-boot-starter</artifactId>
-  <version>2.0.0</version>
+  <version>2.1.0</version>
 </dependency>
 ```
 
 ## Basic configuration
+
+Upgrading from 2.0.x? Read the [2.1.0 release and upgrade notes](docs/release-2.1.0.md)
+before deployment. Default-on vertical schema validation can reject an existing schema at startup.
 
 ```yaml
 nerv:
@@ -71,12 +74,20 @@ GET /management/nerv-audit/audits/vertical/UserEntity?id=101&updatedBy=admin&pag
 For advanced integrations, depend directly on the individual module that owns the needed boundary.
 Normal Spring Boot applications should depend only on the starter.
 
+## Vertical audit persistence
+
+Use the [PostgreSQL migration and validation guide](docs/vertical-audit-persistence.md) for
+production schema setup, UTC timestamp semantics, existing-schema upgrades and default-on
+startup validation. Production vertical audit uses explicit migrations with `ddl-auto=none`.
+
 ## Build and test
 
 Run the complete build from the repository root:
 
 ```bash
 mvn clean verify
+# Real PostgreSQL integration coverage (Docker required):
+mvn clean verify -Ppostgresql
 ```
 
 To install the artifacts for local development:

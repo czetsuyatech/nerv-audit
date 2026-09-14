@@ -3,9 +3,11 @@ package com.czetsuyatech.nerv.audit.infrastructure.envers.listener;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.AuditStrategyType;
 import com.czetsuyatech.nerv.audit.infrastructure.envers.workunit.NervPersistentCollectionChangeWorkUnit;
 import java.io.Serializable;
+import java.time.Clock;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.collection.spi.PersistentCollection;
 import org.hibernate.engine.spi.CollectionEntry;
@@ -24,11 +26,14 @@ import org.hibernate.persister.collection.AbstractCollectionPersister;
  */
 public abstract class NervBaseEnversCollectionEventListener extends BaseEnversEventListener {
 
+  private final Clock clock;
+
   private final AuditStrategyType auditStrategyType;
   private final List<String> auditFields;
 
   protected NervBaseEnversCollectionEventListener() {
     super(null);
+    this.clock = Clock.systemUTC();
     this.auditStrategyType = null;
     this.auditFields = List.of();
   }
@@ -38,8 +43,18 @@ public abstract class NervBaseEnversCollectionEventListener extends BaseEnversEv
       AuditStrategyType auditStrategyType,
       String[] auditFields
   ) {
+    this(enversService, auditStrategyType, auditFields, Clock.systemUTC());
+  }
+
+  protected NervBaseEnversCollectionEventListener(
+      EnversService enversService,
+      AuditStrategyType auditStrategyType,
+      String[] auditFields,
+      Clock clock
+  ) {
 
     super(enversService);
+    this.clock = Objects.requireNonNull(clock, "clock");
     this.auditStrategyType = auditStrategyType;
     this.auditFields = toUppercaseListOrEmpty(auditFields);
   }
@@ -87,7 +102,8 @@ public abstract class NervBaseEnversCollectionEventListener extends BaseEnversEv
             event.getAffectedOwnerIdOrNull(),
             referencingPropertyName,
             auditStrategyType,
-            auditFields);
+            auditFields,
+            clock);
 
     log.debug("adding workUnit to auditProcess");
     auditProcess.addWorkUnit(workUnit);

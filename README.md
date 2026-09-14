@@ -30,11 +30,14 @@ manual assembly, license, activation, additional repository, or credentials.
 <dependency>
   <groupId>com.czetsuyatech.nerv</groupId>
   <artifactId>nerv-audit-spring-boot-starter</artifactId>
-  <version>2.0.0</version>
+  <version>2.1.0</version>
 </dependency>
 ```
 
 ## Basic configuration
+
+Upgrading from 2.0.x? Read the [2.1.0 release and upgrade notes](docs/release-2.1.0.md)
+before deployment. Default-on vertical schema validation can reject an existing schema at startup.
 
 ```yaml
 nerv:
